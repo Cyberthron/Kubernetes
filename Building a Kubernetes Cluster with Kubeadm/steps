@@ -1,0 +1,79 @@
+##Install Docker on all three nodes.One master node and two worker node
+
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+sudo add-apt-repository \
+"deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+$(lsb_release -cs) \
+stable"
+
+sudo apt-get update
+
+sudo apt-get install -y docker-ce=18.06.1~ce~3-0~ubuntu
+
+sudo apt-mark hold docker-ce
+
+##Verify Docker install or not on all three node
+
+sudo systemctl status docker
+
+##Install Kubeadm, Kubelet, and Kubectl on all three nodes
+
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+cat << EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+deb https://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+
+sudo apt-get update
+
+sudo apt-get install -y kubelet=1.12.7-00
+
+kubeadm=1.12.7-00 kubectl=1.12.7-00
+
+sudo apt-mark hold kubelet kubeadm kubectl
+
+##Bootstrap the cluster on the Kube master node
+
+1.On the Kube master node
+
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+
+2.Set up the local kubeconfig
+
+To start using your cluster, you need to run the following as a regular user: 
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+3.On the Kube master node to verify it is up and running
+
+kubectl version
+
+##Join the two Kube worker nodes to the cluster
+
+1.Copy the kubeadm join command that was printed by the kubeadm init command earlier, with the token and hash. Run this command on both worker nodes, but make sure you add sudo in front of it:
+
+kubeadm join 10.0.1.103:6443 --token 71dwe8.dajh6nxelxrbmy05 --discovery-token-ca-cert-hash sha256:14041eb246fbc17ffc5be1e01c6a79f9190ff532787acd712c609cb14640c534
+
+2.Now, on the Kube master node, make sure your nodes joined the cluster successfully:
+
+kubectl get nodes
+
+##Set up cluster networking with flannel.
+
+1.Turn on iptables bridge calls on all three nodes:
+
+echo "net.bridge.bridge-nf-call-iptables=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+2.Next, run this only on the Kube master node:
+
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml
+
+3.Now flannel is installed! Make sure it is working by
+ checking the node status again:
+
+kubectl get nodes
